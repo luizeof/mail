@@ -39,20 +39,15 @@ module Mail
       else
         # Do join first incase we have been given an Array in Ruby 1.9
         if string.respond_to?(:join)
-          @raw_source = ::Mail::Utilities.to_crlf(string.join(''))
+          @raw_source = string.join('')
         elsif string.respond_to?(:to_s)
-          @raw_source = ::Mail::Utilities.to_crlf(string.to_s)
+          @raw_source = string.to_s
         else
           raise "You can only assign a string or an object that responds_to? :join or :to_s to a body."
         end
       end
       @encoding = default_encoding
       set_charset
-    end
-
-    def init_with(coder)
-      coder.map.each { |k, v| instance_variable_set(:"@#{k}", v) }
-      @parts = Mail::PartsList.new(coder['parts'])
     end
 
     # Matches this body with another body.  Also matches the decoded value of this
@@ -138,6 +133,12 @@ module Mail
       @parts.sort!(@part_sort_order)
     end
     
+    # Returns the raw source that the body was initialized with, without
+    # any tampering
+    def raw_source
+      @raw_source
+    end
+
     def negotiate_best_encoding(message_encoding, allowed_encodings = nil)
       Mail::Encodings::TransferEncoding.negotiate(message_encoding, encoding, raw_source, allowed_encodings)
     end
@@ -187,6 +188,14 @@ module Mail
     def to_s
       decoded
     end
+    
+    def charset
+      @charset
+    end
+    
+    def charset=( val )
+      @charset = val
+    end
 
     def encoding(val = nil)
       if val
@@ -205,31 +214,45 @@ module Mail
         end
     end
 
-    # Returns the raw source that the body was initialized with, without
-    # any tampering
-    attr_reader :raw_source
+    # Returns the preamble (any text that is before the first MIME boundary)
+    def preamble
+      @preamble
+    end
 
-    # Returns parts of the body
-    attr_reader :parts
-
-    # Returns and sets the original character encoding
-    attr_accessor :charset
-
-    # Returns and sets the preamble as a string (any text that is before the first MIME boundary)
-    attr_accessor :preamble
-
-    # Returns and sets the epilogue as a string (any text that is after the last MIME boundary)
-    attr_accessor :epilogue
-
-    # Returns and sets the boundary used by the body
-    # Allows you to change the boundary of this Body object
-    attr_accessor :boundary
-
+    # Sets the preamble to a string (adds text before the first MIME boundary)
+    def preamble=( val )
+      @preamble = val
+    end
+    
+    # Returns the epilogue (any text that is after the last MIME boundary)
+    def epilogue
+      @epilogue
+    end
+    
+    # Sets the epilogue to a string (adds text after the last MIME boundary)
+    def epilogue=( val )
+      @epilogue = val
+    end
+    
     # Returns true if there are parts defined in the body
     def multipart?
       true unless parts.empty?
     end
+    
+    # Returns the boundary used by the body
+    def boundary
+      @boundary
+    end
+    
+    # Allows you to change the boundary of this Body object
+    def boundary=( val )
+      @boundary = val
+    end
 
+    def parts
+      @parts
+    end
+    
     def <<( val )
       if @parts
         @parts << val
@@ -272,7 +295,7 @@ module Mail
       parts_regex = /
         (?:                    # non-capturing group
           \A                |  # start of string OR
-          \r\n                 # line break
+          \r?\n                # line break with optional CR
          )
         (
           --#{Regexp.escape(boundary || "")}  # boundary delimiter
